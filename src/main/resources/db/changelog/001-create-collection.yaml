@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-collection
+      author: Darya
+      changes:
+        - createCollection:
+            collectionName: payments
+            options: |
+              {
+                "validator": {
+                  "$jsonSchema": {
+                    "bsonType": "object",
+                    "required": ["order_id", "user_id", "status", "timestamp", "payment_amount"],
+                    "properties": {
+                      "_id": {
+                        "bsonType": "objectId"
+                      },
+                      "order_id": {
+                        "bsonType": "long",
+                        "description": "Order identifier"
+                      },
+                      "user_id": {
+                        "bsonType": "long",
+                        "description": "User identifier"
+                      },
+                      "status": {
+                        "enum": ["SUCCESS", "FAILED"],
+                        "description": "Payment status - must be SUCCESS, or FAILED"
+                      },
+                      "timestamp": {
+                        "bsonType": "date"
+                      },
+                      "payment_amount": {
+                        "bsonType": "decimal",
+                        "minimum": 0.01
+                      }
+                    }
+                  }
+                }
+              }
+
+        - createIndex:
+            collectionName: payments
+            keys: '{"order_id": 1}'
+            options: '{"name": "idx_order_id", "unique": false}'
+
+        - createIndex:
+            collectionName: payments
+            keys: '{"user_id": 1}'
+            options: '{"name": "idx_user_id", "unique": false}'
+
+        - createIndex:
+            collectionName: payments
+            keys: '{"timestamp": 1}'
+            options: '{"name": "idx_timestamp", "unique": false}'
