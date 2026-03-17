@@ -29,6 +29,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<lombok.version>1.18.30</lombok.version>
+		<mapstruct.version>1.5.5.Final</mapstruct.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -64,6 +65,16 @@
 			<optional>true</optional>
 		</dependency>
 		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+			<version>${mapstruct.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok-mapstruct-binding</artifactId>
+			<version>0.2.0</version>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
@@ -77,6 +88,12 @@
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+			<version>4.3.0</version>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.testcontainers</groupId>
@@ -110,6 +127,16 @@
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
 							<version>${lombok.version}</version>
+						</path>
+						<path>
+							<groupId>org.mapstruct</groupId>
+							<artifactId>mapstruct-processor</artifactId>
+							<version>${mapstruct.version}</version>
+						</path>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok-mapstruct-binding</artifactId>
+							<version>0.2.0</version>
 						</path>
 					</annotationProcessorPaths>
 				</configuration>

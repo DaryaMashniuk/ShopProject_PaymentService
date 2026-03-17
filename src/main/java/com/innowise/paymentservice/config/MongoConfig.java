@@ -4,13 +4,29 @@ import liquibase.Liquibase;
 import liquibase.database.Database;
 import liquibase.database.DatabaseFactory;
 import liquibase.resource.ClassLoaderResourceAccessor;
+import org.bson.types.Decimal128;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.data.convert.ReadingConverter;
+import org.springframework.data.convert.WritingConverter;
+import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
+
+import java.math.BigDecimal;
+import java.util.Arrays;
 
 @Configuration
-public class LiquibaseConfig {
+public class MongoConfig {
+
+  @Bean
+  public MongoCustomConversions mongoCustomConversions() {
+    return new MongoCustomConversions(Arrays.asList(
+            new BigDecimalToDecimal128Converter(),
+            new Decimal128ToBigDecimalConverter()
+    ));
+  }
 
   @Value("${spring.liquibase.url}")
   private String mongoUri;
@@ -34,5 +50,24 @@ public class LiquibaseConfig {
         throw e;
       }
     };
+  }
+
+
+  @ReadingConverter
+  public class Decimal128ToBigDecimalConverter implements Converter<Decimal128, BigDecimal> {
+
+    @Override
+    public BigDecimal convert(Decimal128 source) {
+      return source.bigDecimalValue();
+    }
+  }
+
+  @WritingConverter
+  public class BigDecimalToDecimal128Converter implements Converter<BigDecimal, Decimal128> {
+
+    @Override
+    public Decimal128 convert(BigDecimal source) {
+      return new Decimal128(source);
+    }
   }
 }

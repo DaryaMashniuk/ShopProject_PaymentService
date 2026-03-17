@@ -1,0 +1,133 @@
+package com.innowise.paymentservice.service.impl;
+
+import com.innowise.paymentservice.client.PaymentClient;
+import com.innowise.paymentservice.config.RandomOrgProperties;
+import com.innowise.paymentservice.mapper.PaymentMapper;
+import com.innowise.paymentservice.model.Payment;
+import com.innowise.paymentservice.model.PaymentStatus;
+import com.innowise.paymentservice.model.SumResult;
+import com.innowise.paymentservice.model.dto.PaymentRequest;
+import com.innowise.paymentservice.model.dto.PaymentResponse;
+import com.innowise.paymentservice.repository.PaymentRepository;
+import com.innowise.paymentservice.service.PaymentService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class PaymentServiceImpl implements PaymentService {
+
+  private final PaymentRepository paymentRepository;
+  private final PaymentMapper paymentMapper;
+  private final MongoTemplate mongoTemplate;
+  private final PaymentClient paymentClient;
+  private final RandomOrgProperties randomOrgProperties;
+
+  @Override
+  public void createPayment(PaymentRequest paymentRequest) {
+    Payment payment = paymentMapper.toEntity(paymentRequest);
+    String randomNumber = paymentClient.generateNumber(
+            randomOrgProperties.getNum(),
+            randomOrgProperties.getMin(),
+            randomOrgProperties.getMax(),
+            randomOrgProperties.getCol(),
+            randomOrgProperties.getBase(),
+            randomOrgProperties.getFormat(),
+            randomOrgProperties.getRnd()
+    );
+    int number = Integer.parseInt(randomNumber.trim());
+    payment.setStatus(number % 2 == 0 ? PaymentStatus.SUCCESS : PaymentStatus.FAILED);
+    if (payment.getTimestamp() == null) {
+      payment.setTimestamp(LocalDateTime.now());
+    }
+    paymentRepository.save(payment);
+  }
+
+  @Transactional(readOnly = true)
+  @Override
+  public Page<PaymentResponse> findByField(Long userId, Long orderId, PaymentStatus status, Pageable pageable) {
+
+    Query query = new Query();
+    if (status != null) {
+      query.addCriteria(Criteria.where("status").is(status));
+    }
+
+    if (userId != null) {
+      query.addCriteria(Criteria.where("user_id").is(userId));
+    }
+    if (orderId != null) {
+      query.addCriteria(Criteria.where("order_id").is(orderId));
+    }
+    long count = mongoTemplate.count(query,Payment.class);
+    query.with(pageable);
+    List<Payment> payments = mongoTemplate.find(query, Payment.class);
+    return new PageImpl<>(paymentMapper.toDtoList(payments), pageable, count);
+  }
+
+  @Transactional(readOnly = true)
+  @Override
+  public BigDecimal getTotalSumForUserInRange(long userId, LocalDateTime from, LocalDateTime to) {
+    List<Criteria> criteriaList = getPaymentsInRange(from,to);
+    criteriaList.add(Criteria.where("user_id").is(userId));
+    Aggregation aggregation = Aggregation.newAggregation(
+            Aggregation.match(new Criteria().andOperator(criteriaList)),
+            Aggregation.group()
+                    .sum("paymentAmount")
+                    .as("totalForUserInRange")
+    );
+    AggregationResults<SumResult> results = mongoTemplate.aggregate(
+            aggregation,
+            mongoTemplate.getCollectionName(Payment.class),
+            SumResult.class);
+    return Optional.ofNullable(results.getUniqueMappedResult())
+            .map(SumResult::getAmount)
+            .orElse(BigDecimal.ZERO);
+  }
+
+  @Transactional(readOnly = true)
+  @Override
+  public BigDecimal getTotalSumForAllUsersInRange(LocalDateTime from, LocalDateTime to) {
+    List<Criteria> criteriaList = getPaymentsInRange(from,to);
+    Aggregation aggregation = Aggregation.newAggregation(
+            Aggregation.match(new Criteria().andOperator(criteriaList)),
+            Aggregation.group()
+                    .sum("paymentAmount")
+                    .as("totalForAllUsersInRange")
+    );
+    AggregationResults<SumResult> results = mongoTemplate.aggregate(
+            aggregation,
+            mongoTemplate.getCollectionName(Payment.class),
+            SumResult.class);
+    return Optional.ofNullable(results.getUniqueMappedResult())
+            .map(SumResult::getAmount)
+            .orElse(BigDecimal.ZERO);
+  }
+
+  private List<Criteria> getPaymentsInRange(LocalDateTime from, LocalDateTime to) {
+    List<Criteria> criterias = new ArrayList<>();
+    if (from != null && to != null) {
+      criterias.add(Criteria.where("timestamp").gte(from).lte(to));
+    } else if (from != null) {
+      criterias.add(Criteria.where("timestamp").gte(from));
+    } else if (to != null) {
+      criterias.add(Criteria.where("timestamp").lte(to));
+    }
+    return criterias;
+  }
+}

@@ -1,10 +1,12 @@
 package com.innowise.paymentservice;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.innowise.paymentservice.config.RandomOrgProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
+@EnableConfigurationProperties(RandomOrgProperties.class)
 public class PaymentserviceApplication {
 
 	public static void main(String[] args) {
