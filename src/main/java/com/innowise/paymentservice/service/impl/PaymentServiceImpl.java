@@ -2,12 +2,14 @@ package com.innowise.paymentservice.service.impl;
 
 import com.innowise.paymentservice.client.PaymentClient;
 import com.innowise.paymentservice.config.RandomOrgProperties;
+import com.innowise.paymentservice.exceptions.ExternalServiceUnavailableException;
 import com.innowise.paymentservice.mapper.PaymentMapper;
 import com.innowise.paymentservice.model.Payment;
 import com.innowise.paymentservice.model.PaymentStatus;
 import com.innowise.paymentservice.model.SumResult;
 import com.innowise.paymentservice.model.dto.PaymentRequest;
 import com.innowise.paymentservice.model.dto.PaymentResponse;
+import com.innowise.paymentservice.model.dto.PaymentSearchCriteria;
 import com.innowise.paymentservice.repository.PaymentRepository;
 import com.innowise.paymentservice.service.PaymentService;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
   private final RandomOrgProperties randomOrgProperties;
 
   @Override
-  public void createPayment(PaymentRequest paymentRequest) {
+  public PaymentResponse createPayment(PaymentRequest paymentRequest) {
     Payment payment = paymentMapper.toEntity(paymentRequest);
     String randomNumber = paymentClient.generateNumber(
             randomOrgProperties.getNum(),
@@ -51,28 +53,33 @@ public class PaymentServiceImpl implements PaymentService {
             randomOrgProperties.getFormat(),
             randomOrgProperties.getRnd()
     );
+    if (randomNumber.isEmpty()) {
+      throw new ExternalServiceUnavailableException("External service unavailable");
+    }
     int number = Integer.parseInt(randomNumber.trim());
     payment.setStatus(number % 2 == 0 ? PaymentStatus.SUCCESS : PaymentStatus.FAILED);
     if (payment.getTimestamp() == null) {
       payment.setTimestamp(LocalDateTime.now());
     }
-    paymentRepository.save(payment);
+    Payment response = paymentRepository.save(payment);
+    return paymentMapper.toDto(response);
   }
 
   @Transactional(readOnly = true)
   @Override
-  public Page<PaymentResponse> findByField(Long userId, Long orderId, PaymentStatus status, Pageable pageable) {
+  public Page<PaymentResponse> findByCriteria(PaymentSearchCriteria criteria,Pageable pageable) {
 
     Query query = new Query();
-    if (status != null) {
-      query.addCriteria(Criteria.where("status").is(status));
+    if (criteria.getStatus() != null) {
+      PaymentStatus enumStatus = PaymentStatus.valueOf(criteria.getStatus());
+      query.addCriteria(Criteria.where("status").is(enumStatus));
     }
 
-    if (userId != null) {
-      query.addCriteria(Criteria.where("user_id").is(userId));
+    if (criteria.getUserId() != null) {
+      query.addCriteria(Criteria.where("user_id").is(criteria.getUserId()));
     }
-    if (orderId != null) {
-      query.addCriteria(Criteria.where("order_id").is(orderId));
+    if (criteria.getOrderId() != null) {
+      query.addCriteria(Criteria.where("order_id").is(criteria.getOrderId()));
     }
     long count = mongoTemplate.count(query,Payment.class);
     query.with(pageable);
@@ -88,8 +95,8 @@ public class PaymentServiceImpl implements PaymentService {
     Aggregation aggregation = Aggregation.newAggregation(
             Aggregation.match(new Criteria().andOperator(criteriaList)),
             Aggregation.group()
-                    .sum("paymentAmount")
-                    .as("totalForUserInRange")
+                    .sum("payment_amount")
+                    .as("amount")
     );
     AggregationResults<SumResult> results = mongoTemplate.aggregate(
             aggregation,
@@ -104,12 +111,22 @@ public class PaymentServiceImpl implements PaymentService {
   @Override
   public BigDecimal getTotalSumForAllUsersInRange(LocalDateTime from, LocalDateTime to) {
     List<Criteria> criteriaList = getPaymentsInRange(from,to);
-    Aggregation aggregation = Aggregation.newAggregation(
-            Aggregation.match(new Criteria().andOperator(criteriaList)),
-            Aggregation.group()
-                    .sum("paymentAmount")
-                    .as("totalForAllUsersInRange")
-    );
+    Aggregation aggregation;
+    if (criteriaList.isEmpty()) {
+      aggregation = Aggregation.newAggregation(
+              Aggregation.group()
+                      .sum("payment_amount")
+                      .as("amount")
+      );
+    } else {
+      aggregation = Aggregation.newAggregation(
+              Aggregation.match(new Criteria().andOperator(criteriaList)),
+              Aggregation.group()
+                      .sum("payment_amount")
+                      .as("amount")
+      );
+    }
+
     AggregationResults<SumResult> results = mongoTemplate.aggregate(
             aggregation,
             mongoTemplate.getCollectionName(Payment.class),
