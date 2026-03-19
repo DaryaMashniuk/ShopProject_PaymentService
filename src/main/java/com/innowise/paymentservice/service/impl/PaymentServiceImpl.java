@@ -11,6 +11,7 @@ import com.innowise.paymentservice.model.dto.PaymentSearchCriteria;
 import com.innowise.paymentservice.repository.PaymentRepository;
 import com.innowise.paymentservice.service.PaymentService;
 import lombok.RequiredArgsConstructor;
+import org.bson.types.Decimal128;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -77,6 +78,7 @@ public class PaymentServiceImpl implements PaymentService {
   public BigDecimal getTotalSumForUserInRange(long userId, LocalDateTime from, LocalDateTime to) {
     List<Criteria> criteriaList = getPaymentsInRange(from,to);
     criteriaList.add(Criteria.where("user_id").is(userId));
+    criteriaList.add(Criteria.where("status").is(PaymentStatus.SUCCESS));
     Aggregation aggregation = Aggregation.newAggregation(
             Aggregation.match(new Criteria().andOperator(criteriaList)),
             Aggregation.group()
@@ -96,6 +98,7 @@ public class PaymentServiceImpl implements PaymentService {
   @Override
   public BigDecimal getTotalSumForAllUsersInRange(LocalDateTime from, LocalDateTime to) {
     List<Criteria> criteriaList = getPaymentsInRange(from,to);
+    criteriaList.add(Criteria.where("status").is(PaymentStatus.SUCCESS));
     Aggregation aggregation;
     if (criteriaList.isEmpty()) {
       aggregation = Aggregation.newAggregation(

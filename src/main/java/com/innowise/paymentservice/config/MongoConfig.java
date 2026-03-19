@@ -7,6 +7,7 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import org.bson.types.Decimal128;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -28,14 +29,9 @@ public class MongoConfig {
     ));
   }
 
-  @Value("${spring.liquibase.url}")
-  private String mongoUri;
-
-  @Value("${spring.liquibase.change-log}")
-  private String changeLogPath;
-
   @Bean
-  public InitializingBean liquibaseRunner() {
+  @ConditionalOnProperty(name = "spring.liquibase.enabled", havingValue = "true", matchIfMissing = true)
+  public InitializingBean liquibaseRunner(@Value("${spring.liquibase.url}") String mongoUri,@Value("${spring.liquibase.change-log}") String changeLogPath ) {
     return () -> {
       try {
         Database database = DatabaseFactory.getInstance()
