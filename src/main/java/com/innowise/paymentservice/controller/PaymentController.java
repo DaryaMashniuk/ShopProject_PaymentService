@@ -1,10 +1,10 @@
 package com.innowise.paymentservice.controller;
 
+import com.innowise.paymentservice.facade.PaymentFacade;
 import com.innowise.paymentservice.model.dto.PaymentRequest;
 import com.innowise.paymentservice.model.dto.PaymentResponse;
 
 import com.innowise.paymentservice.model.dto.PaymentSearchCriteria;
-import com.innowise.paymentservice.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,13 +29,13 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class PaymentController {
 
-  private final PaymentService paymentService;
+  private final PaymentFacade paymentFacade;
 
   @PostMapping
   @PreAuthorize("@authorisationService.isSelf(#paymentRequest.userId, authentication)")
   public ResponseEntity<PaymentResponse> createPayment(
           @RequestBody @Valid PaymentRequest paymentRequest) {
-    PaymentResponse response = paymentService.createPayment(paymentRequest);
+    PaymentResponse response = paymentFacade.createPayment(paymentRequest);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
   }
 
@@ -51,7 +51,7 @@ public class PaymentController {
           Pageable pageable
   ){
     PaymentSearchCriteria criteria = new PaymentSearchCriteria(userId,orderId,status);
-    Page<PaymentResponse> response = paymentService.findByCriteria(criteria, pageable);
+    Page<PaymentResponse> response = paymentFacade.findByCriteria(criteria, pageable);
     return ResponseEntity.status(HttpStatus.OK).body(response);
   }
 
@@ -65,7 +65,7 @@ public class PaymentController {
           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
           ) {
-    BigDecimal response = paymentService.getTotalSumForUserInRange(userId,from,to);
+    BigDecimal response = paymentFacade.getTotalSumForUserInRange(userId,from,to);
     return ResponseEntity.ok().body(response);
   }
 
@@ -75,7 +75,7 @@ public class PaymentController {
           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
   ) {
-    BigDecimal response = paymentService.getTotalSumForAllUsersInRange(from,to);
+    BigDecimal response = paymentFacade.getTotalSumForAllUsersInRange(from,to);
     return ResponseEntity.ok().body(response);
   }
 

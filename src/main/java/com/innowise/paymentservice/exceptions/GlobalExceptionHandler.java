@@ -43,6 +43,40 @@ public class GlobalExceptionHandler {
     return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
   }
 
+  @ExceptionHandler(PaymentAmountMismatchException.class)
+  public ResponseEntity<ErrorResponse> handlePaymentAmountMismatchException(
+          PaymentAmountMismatchException ex,
+          WebRequest request) {
+
+    ErrorResponse errorResponse = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            HttpStatus.BAD_REQUEST.getReasonPhrase(),
+            ex.getMessage(),
+            request.getDescription(false),
+            null
+    );
+
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+  }
+
+  @ExceptionHandler(PaymentIsAlreadyFinishedException.class)
+  public ResponseEntity<ErrorResponse> handlePaymentIsAlreadyFinishedException(
+          PaymentIsAlreadyFinishedException ex,
+          WebRequest request) {
+
+    ErrorResponse errorResponse = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            HttpStatus.BAD_REQUEST.getReasonPhrase(),
+            ex.getMessage(),
+            request.getDescription(false),
+            null
+    );
+
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+  }
+
 
   @ExceptionHandler(ExternalServiceUnavailableException.class)
   public ResponseEntity<ErrorResponse> handleExternalServiceUnavailableException(

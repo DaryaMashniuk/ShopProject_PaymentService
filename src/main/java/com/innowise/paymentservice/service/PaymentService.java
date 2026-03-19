@@ -1,5 +1,6 @@
 package com.innowise.paymentservice.service;
 
+import com.innowise.paymentservice.model.PaymentStatus;
 import com.innowise.paymentservice.model.dto.PaymentRequest;
 import com.innowise.paymentservice.model.dto.PaymentResponse;
 import com.innowise.paymentservice.model.dto.PaymentSearchCriteria;
@@ -10,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public interface PaymentService {
-  PaymentResponse createPayment(PaymentRequest paymentRequest);
+  PaymentResponse createPayment(PaymentRequest paymentRequest, PaymentStatus status);
   Page<PaymentResponse> findByCriteria(PaymentSearchCriteria criteria, Pageable pageable);
   BigDecimal getTotalSumForUserInRange(long userId, LocalDateTime from, LocalDateTime to);
   BigDecimal getTotalSumForAllUsersInRange(LocalDateTime from, LocalDateTime to);

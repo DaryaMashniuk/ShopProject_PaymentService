@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
@@ -19,13 +20,15 @@ import java.time.LocalDateTime;
 public class Payment {
   @Id
   private String id;
+  @Indexed
   @Field(name = "user_id")
   private Long userId;
+  @Indexed
   @Field(name = "order_id")
   private Long orderId;
 
   private PaymentStatus status;
-
+  @Indexed
   private LocalDateTime timestamp;
   @Field(name = "payment_amount")
   private BigDecimal paymentAmount;

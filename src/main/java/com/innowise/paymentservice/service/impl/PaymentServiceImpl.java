@@ -1,8 +1,6 @@
 package com.innowise.paymentservice.service.impl;
 
-import com.innowise.paymentservice.client.PaymentClient;
-import com.innowise.paymentservice.config.RandomOrgProperties;
-import com.innowise.paymentservice.exceptions.ExternalServiceUnavailableException;
+
 import com.innowise.paymentservice.mapper.PaymentMapper;
 import com.innowise.paymentservice.model.Payment;
 import com.innowise.paymentservice.model.PaymentStatus;
@@ -38,26 +36,13 @@ public class PaymentServiceImpl implements PaymentService {
   private final PaymentRepository paymentRepository;
   private final PaymentMapper paymentMapper;
   private final MongoTemplate mongoTemplate;
-  private final PaymentClient paymentClient;
-  private final RandomOrgProperties randomOrgProperties;
+
 
   @Override
-  public PaymentResponse createPayment(PaymentRequest paymentRequest) {
+  public PaymentResponse createPayment(PaymentRequest paymentRequest, PaymentStatus status) {
     Payment payment = paymentMapper.toEntity(paymentRequest);
-    String randomNumber = paymentClient.generateNumber(
-            randomOrgProperties.getNum(),
-            randomOrgProperties.getMin(),
-            randomOrgProperties.getMax(),
-            randomOrgProperties.getCol(),
-            randomOrgProperties.getBase(),
-            randomOrgProperties.getFormat(),
-            randomOrgProperties.getRnd()
-    );
-    if (randomNumber.isEmpty()) {
-      throw new ExternalServiceUnavailableException("External service unavailable");
-    }
-    int number = Integer.parseInt(randomNumber.trim());
-    payment.setStatus(number % 2 == 0 ? PaymentStatus.SUCCESS : PaymentStatus.FAILED);
+
+    payment.setStatus(status);
     if (payment.getTimestamp() == null) {
       payment.setTimestamp(LocalDateTime.now());
     }
