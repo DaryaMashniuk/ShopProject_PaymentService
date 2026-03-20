@@ -9,7 +9,7 @@ import org.springframework.kafka.config.TopicBuilder;
 @Configuration
 public class KafkaConfig {
 
-  @Value("${kafka.payment.topic.name}")
+  @Value("${KAFKA_PAYMENT_EVENTS_TOPIC:payment-events}")
   private String topicName;
 
   @Bean
