@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class PaymentEventProducer {
-  @Value("${kafka.payment.topic.name}")
+  @Value("${KAFKA_PAYMENT_EVENTS_TOPIC:payment-events}")
   private String topicName;
   private static final Logger logger = LogManager.getLogger(PaymentEventProducer.class);
   private final KafkaTemplate<String, PaymentStatusEvent> kafkaTemplate;

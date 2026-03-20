@@ -15,7 +15,7 @@ public class OrderEventConsumer {
   private final OrderInfoRepository repository;
   private final Logger logger = LogManager.getLogger(OrderEventConsumer.class);
 
-  @KafkaListener(topics = "${kafka.order.topic.name}")
+  @KafkaListener(topics = "${KAFKA_ORDER_TOPIC_NAME:order-events}")
   public void handleOrderCreated(OrderCreatedEvent event) {
     OrderInfoView view = new OrderInfoView(event.getOrderId(), event.getTotalPrice());
     repository.save(view);
