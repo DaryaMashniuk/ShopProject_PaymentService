@@ -42,22 +42,13 @@ public abstract class AbstractIntegrationTest {
                   .asCompatibleSubstituteFor("apache/kafka"))
           .withReuse(true);
 
-  protected static WireMockServer wireMockServer;
+  protected static final WireMockServer wireMockServer;
 
-  @BeforeAll
-  static void startAll() {
+  static {
     wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
     wireMockServer.start();
     WireMock.configureFor("localhost", wireMockServer.port());
   }
-
-  @AfterAll
-  static void stopAll() {
-    if (wireMockServer != null && wireMockServer.isRunning()) {
-      wireMockServer.stop();
-    }
-  }
-
   @BeforeEach
   void resetStubs() {
     if (wireMockServer != null) {
