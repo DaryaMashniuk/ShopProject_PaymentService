@@ -11,7 +11,6 @@ import com.innowise.paymentservice.model.dto.PaymentSearchCriteria;
 import com.innowise.paymentservice.repository.PaymentRepository;
 import com.innowise.paymentservice.service.PaymentService;
 import lombok.RequiredArgsConstructor;
-import org.bson.types.Decimal128;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -37,7 +36,10 @@ public class PaymentServiceImpl implements PaymentService {
   private final PaymentRepository paymentRepository;
   private final PaymentMapper paymentMapper;
   private final MongoTemplate mongoTemplate;
-
+  private static final String AMOUNT_FIELD = "amount";
+  private static final String PAYMENT_AMOUNT_FIELD = "payment_amount";
+  private static final String STATUS_FIELD = "status";
+  private static final String TIMESTAMP_FIELD = "timestamp";
 
   @Override
   public PaymentResponse createPayment(PaymentRequest paymentRequest, PaymentStatus status) {
@@ -58,7 +60,7 @@ public class PaymentServiceImpl implements PaymentService {
     Query query = new Query();
     if (criteria.getStatus() != null) {
       PaymentStatus enumStatus = PaymentStatus.valueOf(criteria.getStatus());
-      query.addCriteria(Criteria.where("status").is(enumStatus));
+      query.addCriteria(Criteria.where(STATUS_FIELD).is(enumStatus));
     }
 
     if (criteria.getUserId() != null) {
@@ -78,12 +80,12 @@ public class PaymentServiceImpl implements PaymentService {
   public BigDecimal getTotalSumForUserInRange(long userId, LocalDateTime from, LocalDateTime to) {
     List<Criteria> criteriaList = getPaymentsInRange(from,to);
     criteriaList.add(Criteria.where("user_id").is(userId));
-    criteriaList.add(Criteria.where("status").is(PaymentStatus.SUCCESS));
+    criteriaList.add(Criteria.where(STATUS_FIELD).is(PaymentStatus.SUCCESS));
     Aggregation aggregation = Aggregation.newAggregation(
             Aggregation.match(new Criteria().andOperator(criteriaList)),
             Aggregation.group()
-                    .sum("payment_amount")
-                    .as("amount")
+                    .sum(PAYMENT_AMOUNT_FIELD)
+                    .as(AMOUNT_FIELD)
     );
     AggregationResults<SumResult> results = mongoTemplate.aggregate(
             aggregation,
@@ -98,20 +100,21 @@ public class PaymentServiceImpl implements PaymentService {
   @Override
   public BigDecimal getTotalSumForAllUsersInRange(LocalDateTime from, LocalDateTime to) {
     List<Criteria> criteriaList = getPaymentsInRange(from,to);
-    criteriaList.add(Criteria.where("status").is(PaymentStatus.SUCCESS));
     Aggregation aggregation;
     if (criteriaList.isEmpty()) {
       aggregation = Aggregation.newAggregation(
+              Aggregation.match(Criteria.where(STATUS_FIELD).is(PaymentStatus.SUCCESS)),
               Aggregation.group()
-                      .sum("payment_amount")
-                      .as("amount")
+                      .sum(PAYMENT_AMOUNT_FIELD)
+                      .as(AMOUNT_FIELD)
       );
     } else {
       aggregation = Aggregation.newAggregation(
               Aggregation.match(new Criteria().andOperator(criteriaList)),
+              Aggregation.match(Criteria.where(STATUS_FIELD).is(PaymentStatus.SUCCESS)),
               Aggregation.group()
-                      .sum("payment_amount")
-                      .as("amount")
+                      .sum(PAYMENT_AMOUNT_FIELD)
+                      .as(AMOUNT_FIELD)
       );
     }
 
@@ -127,11 +130,11 @@ public class PaymentServiceImpl implements PaymentService {
   private List<Criteria> getPaymentsInRange(LocalDateTime from, LocalDateTime to) {
     List<Criteria> criterias = new ArrayList<>();
     if (from != null && to != null) {
-      criterias.add(Criteria.where("timestamp").gte(from).lte(to));
+      criterias.add(Criteria.where(TIMESTAMP_FIELD).gte(from).lte(to));
     } else if (from != null) {
-      criterias.add(Criteria.where("timestamp").gte(from));
+      criterias.add(Criteria.where(TIMESTAMP_FIELD).gte(from));
     } else if (to != null) {
-      criterias.add(Criteria.where("timestamp").lte(to));
+      criterias.add(Criteria.where(TIMESTAMP_FIELD).lte(to));
     }
     return criterias;
   }

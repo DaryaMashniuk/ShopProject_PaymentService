@@ -1,6 +1,5 @@
 package com.innowise.paymentservice.kafka;
 
-import com.innowise.paymentservice.facade.PaymentFacade;
 import com.innowise.paymentservice.model.events.PaymentStatusEvent;
 import lombok.RequiredArgsConstructor;
 import org.apache.logging.log4j.LogManager;

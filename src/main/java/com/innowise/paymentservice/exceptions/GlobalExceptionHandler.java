@@ -25,7 +25,7 @@ import java.util.Map;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-  private Logger logger = LogManager.getLogger(GlobalExceptionHandler.class);
+  private static final Logger logger = LogManager.getLogger(GlobalExceptionHandler.class);
 
   @ExceptionHandler(ResourceNotFoundException.class)
   public ResponseEntity<ErrorResponse> handleResourceNotFoundException(
@@ -145,7 +145,8 @@ public class GlobalExceptionHandler {
           MethodArgumentTypeMismatchException ex,
           WebRequest request) {
 
-    String message = String.format("Invalid parameter ");
+    String message = "Invalid parameter";
+    logger.error(message);
 
     ErrorResponse errorResponse = new ErrorResponse(
             Instant.now(),
