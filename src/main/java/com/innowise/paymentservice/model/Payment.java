@@ -26,7 +26,7 @@ public class Payment {
   @Indexed
   @Field(name = "order_id")
   private Long orderId;
-
+  @Indexed
   private PaymentStatus status;
   @Indexed
   private LocalDateTime timestamp;

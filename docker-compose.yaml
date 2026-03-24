@@ -24,6 +24,7 @@ services:
       PAYMENT_CLIENT_URL: https://www.random.org
       MONGO_URL: mongodb://mongodb:27017/payments
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      LIQUIBASE_MONGODB_URL: ${MONGO_URL:-mongodb://mongodb:27017/payments}
       KAFKA_PAYMENT_TOPIC_NAME: ${KAFKA_PAYMENT_TOPIC_NAME:-payment-events}
       KAFKA_ORDER_TOPIC_NAME: ${KAFKA_ORDER_TOPIC_NAME:-order-events}
     networks:

@@ -24,8 +24,7 @@ public class PaymentRequest {
   @NotNull
   @Positive
   private Long orderId;
-  @Past
-  @NotNull
+
   private LocalDateTime timestamp;
   @Positive
   @NotNull

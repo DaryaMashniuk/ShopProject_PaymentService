@@ -53,3 +53,7 @@ databaseChangeLog:
             collectionName: payments
             keys: '{"timestamp": 1}'
             options: '{"name": "idx_timestamp", "unique": false}'
+        - createIndex:
+            collectionName: payments
+            keys: '{"status": 1}'
+            options: '{"name": "idx_status", "unique": false}'

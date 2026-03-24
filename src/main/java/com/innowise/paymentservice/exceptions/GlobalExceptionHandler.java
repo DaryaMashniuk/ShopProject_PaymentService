@@ -88,7 +88,7 @@ public class GlobalExceptionHandler {
             Instant.now(),
             HttpStatus.SERVICE_UNAVAILABLE.value(),
             HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(),
-            "Something went wrong, the User service is not available",
+            "Something went wrong, the External service is not available",
             request.getDescription(false),
             null
     );
