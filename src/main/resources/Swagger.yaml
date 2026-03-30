@@ -1,0 +1,684 @@
+openapi: 3.1.0
+info:
+  title: Payment Service API
+  description: |
+    Payment Service API for managing payments in a microservices-based e-commerce platform.
+    This service handles payment processing, validation, and event-driven communication with other services.
+
+    ## Core Features
+    * **Payment Processing**: Create payments with automatic status determination via external random number API
+    * **Payment Validation**: Validate payments against order information from Order Service
+    * **Advanced Search**: Filter payments by user ID, order ID, status with pagination support
+    * **Financial Statistics**: Calculate total payment amounts for specific users or all users over date ranges
+    * **Event-Driven Architecture**: Kafka-based communication with Order Service for payment status updates
+
+    ## Business Logic
+    * Payment status is determined by an external random number generator:
+      * Even number → Payment SUCCESS
+      * Odd number → Payment FAILED
+    * Payments are validated against order information cached from Order Service events
+    * Successful payments trigger Kafka events that Order Service consumes to update order status
+
+    ## Security Model
+    The API uses JWT-based authentication with role-based access control:
+
+    | Role | Permissions |
+    |------|------------|
+    | USER | Create own payments, view own payments, calculate own payment totals |
+    | ADMIN | Full access to all payments and statistics across all users |
+
+    ## Integration Points
+    * **External Random Number API**: Used for payment status determination
+    * **Kafka**: Event-driven communication with Order Service
+    * **Order Service Cache**: Maintains order information for payment validation
+
+    ## Data Storage
+    * MongoDB for payment records with optimized indexes
+    * Liquibase for schema version control and migration
+    * Cached order information for validation purposes
+
+    ## Error Handling
+    The API provides comprehensive error responses with:
+    * Timestamp of error occurrence
+    * HTTP status code and reason phrase
+    * Detailed error message
+    * Request path
+    * Field-level validation errors when applicable
+
+
+servers:
+  - url: http://localhost:8084/api/v1
+    description: Local development server
+  - url: https://api.payment-service.com/v1
+    description: Production server
+
+tags:
+  - name: Payments
+    description: Payment creation and retrieval operations
+  - name: Statistics
+    description: Payment aggregation and statistical endpoints
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from authentication service.
+        Format: Bearer <token>
+        Required for all endpoints except internal event handlers.
+
+  schemas:
+    PaymentRequest:
+      type: object
+      description: |
+        Request payload for creating a new payment.
+        The payment will be validated against existing order information
+        cached from Order Service events.
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: Unique identifier of the user making the payment
+          example: 12345
+          minimum: 1
+        orderId:
+          type: integer
+          format: int64
+          description: |
+            Unique identifier of the order being paid for.
+            Must match an existing order in the system cache.
+          example: 67890
+          minimum: 1
+        timestamp:
+          type: string
+          format: date-time
+          description: |
+            Date and time when the payment was initiated.
+            Must be in the past (cannot be a future date).
+          example: "2024-03-15T10:30:00Z"
+        paymentAmount:
+          type: number
+          format: decimal
+          description: |
+            Payment amount in the currency of the order.
+            Must be positive and should match the order total amount.
+          example: 99.99
+          minimum: 0.01
+          exclusiveMinimum: true
+      required:
+        - userId
+        - orderId
+        - timestamp
+        - paymentAmount
+      example:
+        userId: 12345
+        orderId: 67890
+        timestamp: "2024-03-15T10:30:00Z"
+        paymentAmount: 99.99
+
+    PaymentResponse:
+      type: object
+      description: Complete payment information returned after successful creation or retrieval
+      properties:
+        id:
+          type: string
+          description: Unique MongoDB identifier for the payment record
+          example: "507f1f77bcf86cd799439011"
+        userId:
+          type: integer
+          format: int64
+          description: ID of the user who made the payment
+          example: 12345
+        orderId:
+          type: integer
+          format: int64
+          description: ID of the associated order
+          example: 67890
+        status:
+          type: string
+          description: |
+            Current status of the payment determined by external random number API:
+            * SUCCESS - Random number was even
+            * FAILED - Random number was odd
+          enum:
+            - SUCCESS
+            - FAILED
+          example: "SUCCESS"
+        timestamp:
+          type: string
+          format: date-time
+          description: Date and time when the payment was processed and stored
+          example: "2024-03-15T10:30:00Z"
+        paymentAmount:
+          type: number
+          format: decimal
+          description: Actual payment amount processed
+          example: 99.99
+      example:
+        id: "507f1f77bcf86cd799439011"
+        userId: 12345
+        orderId: 67890
+        status: "SUCCESS"
+        timestamp: "2024-03-15T10:30:00Z"
+        paymentAmount: 99.99
+
+    PaymentSearchCriteria:
+      type: object
+      description: Criteria for filtering payments in search operations
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: Filter payments by specific user ID
+          example: 12345
+          minimum: 1
+        orderId:
+          type: integer
+          format: int64
+          description: Filter payments by specific order ID
+          example: 67890
+          minimum: 1
+        status:
+          type: string
+          description: Filter payments by their current status
+          enum:
+            - SUCCESS
+            - FAILED
+          example: "SUCCESS"
+
+    Pageable:
+      type: object
+      description: Pagination parameters for list endpoints
+      properties:
+        page:
+          type: integer
+          description: Zero-based page number for pagination
+          default: 0
+          example: 0
+          minimum: 0
+        size:
+          type: integer
+          description: Number of items per page (capped at 100)
+          default: 20
+          example: 10
+          minimum: 1
+          maximum: 100
+        sort:
+          type: string
+          description: |
+            Sort criteria in format: property,asc|desc
+            Supported properties: timestamp, paymentAmount, userId, orderId, status
+          example: "timestamp,desc"
+
+    PageResponse:
+      type: object
+      description: Paginated response wrapper containing payment list and metadata
+      properties:
+        content:
+          type: array
+          description: Array of payment objects for the current page
+          items:
+            $ref: '#/components/schemas/PaymentResponse'
+        pageable:
+          type: object
+          description: Pagination information for the current request
+          properties:
+            pageNumber:
+              type: integer
+              description: Current page number (zero-based)
+              example: 0
+            pageSize:
+              type: integer
+              description: Number of items per page
+              example: 10
+            sort:
+              type: object
+              properties:
+                sorted:
+                  type: boolean
+                  description: Whether the results are sorted
+                  example: true
+                unsorted:
+                  type: boolean
+                  description: Whether the results are unsorted
+                  example: false
+        totalPages:
+          type: integer
+          description: Total number of pages available
+          example: 5
+        totalElements:
+          type: integer
+          description: Total number of elements across all pages
+          example: 50
+        last:
+          type: boolean
+          description: Whether this is the last page
+          example: false
+        first:
+          type: boolean
+          description: Whether this is the first page
+          example: true
+        empty:
+          type: boolean
+          description: Whether the content is empty
+          example: false
+
+    ErrorResponse:
+      type: object
+      description: Standardized error response for all API error conditions
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the error occurred
+          example: "2024-03-15T10:30:00Z"
+        status:
+          type: integer
+          description: HTTP status code of the error
+          example: 400
+        error:
+          type: string
+          description: HTTP status phrase corresponding to the status code
+          example: "Bad Request"
+        message:
+          type: string
+          description: Human-readable error message explaining the issue
+          example: "Validation failed for 2 field(s)"
+        path:
+          type: string
+          description: Request path that triggered the error
+          example: "/api/v1/payments"
+        errors:
+          type: object
+          description: Field-specific validation errors (present only for validation failures)
+          additionalProperties:
+            type: string
+          example:
+            userId: "must not be null"
+            paymentAmount: "must be positive"
+
+    OrderCreatedEvent:
+      type: object
+      description: |
+        Internal event consumed from Order Service via Kafka.
+        Used to cache order information for payment validation.
+      properties:
+        orderId:
+          type: integer
+          format: int64
+          description: Unique identifier of the created order
+          example: 67890
+        totalPrice:
+          type: number
+          format: decimal
+          description: Total price of the order for payment validation
+          example: 99.99
+      required:
+        - orderId
+        - totalPrice
+
+    PaymentStatusEvent:
+      type: object
+      description: |
+        Event produced to Kafka after payment processing.
+        Consumed by Order Service to update order status.
+      properties:
+        orderId:
+          type: integer
+          format: int64
+          description: ID of the order associated with the payment
+          example: 67890
+        paymentStatus:
+          type: string
+          description: Final status of the processed payment
+          enum:
+            - SUCCESS
+            - FAILED
+          example: "SUCCESS"
+
+security:
+  - bearerAuth: []
+
+paths:
+  /payments:
+    post:
+      tags:
+        - Payments
+      summary: Create a new payment
+      description: |
+        Processes a new payment with the following workflow:
+        1. Validates the payment request against cached order information
+        2. Calls external random number API to determine payment status
+        3. Saves the payment with calculated status (SUCCESS/FAILED)
+        4. Publishes a PaymentStatusEvent to Kafka for Order Service consumption
+        5. Returns the created payment information
+
+        **Important Notes:**
+        * Payment amount must match the cached order total
+        * Order must exist in cache (received via OrderCreatedEvent)
+        * Payment cannot be created for already processed orders
+        * External API unavailability will result in 503 error
+      operationId: createPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+            examples:
+              validPaymentRequest:
+                summary: Valid payment creation request
+                value:
+                  userId: 12345
+                  orderId: 67890
+                  timestamp: "2024-03-15T10:30:00Z"
+                  paymentAmount: 99.99
+      responses:
+        '201':
+          description: Payment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+              examples:
+                successPayment:
+                  summary: Payment with SUCCESS status
+                  value:
+                    id: "507f1f77bcf86cd799439011"
+                    userId: 12345
+                    orderId: 67890
+                    status: "SUCCESS"
+                    timestamp: "2024-03-15T10:30:00Z"
+                    paymentAmount: 99.99
+                failedPayment:
+                  summary: Payment with FAILED status
+                  value:
+                    id: "507f1f77bcf86cd799439012"
+                    userId: 12345
+                    orderId: 67891
+                    status: "FAILED"
+                    timestamp: "2024-03-15T10:31:00Z"
+                    paymentAmount: 149.99
+        '400':
+          description: |
+            Bad Request - Validation failed. Possible reasons:
+            * Missing required fields
+            * Invalid field values (negative amounts, future timestamps)
+            * Payment amount mismatch with order total
+            * Order already has a payment processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: |
+            Forbidden - User doesn't have permission to create payment for this userId
+        '503':
+          description: |
+            Service Unavailable - External random number API is not responding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2024-03-15T10:30:00Z"
+                status: 503
+                error: "Service Unavailable"
+                message: "External service unavailable"
+                path: "/api/v1/payments"
+
+    get:
+      tags:
+        - Payments
+      summary: Search payments with filters
+      description: |
+        Retrieves a paginated list of payments based on provided filters.
+        
+        **Access Rules:**
+        * Regular users: Can only see their own payments (userId must match authenticated user)
+        * Administrators: Can see all payments regardless of userId
+        
+        **Filtering Behavior:**
+        * Filters are combined with AND logic
+        * Omitting a filter means "no restriction" for that field
+        * At least one filter parameter must be provided
+        * Results are paginated with configurable page size and sorting
+      operationId: getPaymentsFilteredByFields
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          description: Filter by user ID (regular users can only use their own ID)
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          example: 12345
+        - name: orderId
+          in: query
+          description: Filter by order ID
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          example: 67890
+        - name: status
+          in: query
+          description: Filter by payment status
+          required: false
+          schema:
+            type: string
+            enum: [SUCCESS, FAILED]
+          example: "SUCCESS"
+        - name: page
+          in: query
+          description: Page number (zero-based) for pagination
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          example: 0
+        - name: size
+          in: query
+          description: Number of items per page (max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          example: 10
+        - name: sort
+          in: query
+          description: |
+            Sort criteria. Format: `property,asc` or `property,desc`
+            Multiple sort criteria can be specified with multiple sort parameters.
+            Supported properties: timestamp, paymentAmount, userId, orderId, status
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+              pattern: '^[a-zA-Z]+(,(asc|desc))?$'
+          example: ["timestamp,desc", "paymentAmount,asc"]
+      responses:
+        '200':
+          description: Successfully retrieved payments matching the criteria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageResponse'
+        '400':
+          description: Invalid filter parameters or pagination values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User attempting to access another user's payments without admin role
+
+  /payments/users/{userId}/total:
+    get:
+      tags:
+        - Statistics
+      summary: Get total payment amount for a specific user
+      description: |
+        Calculates the sum of all successful payments made by a specific user.
+        
+        **Date Range Filtering:**
+        * If both from and to are provided: payments between those dates (inclusive)
+        * If only from is provided: payments from that date onwards
+        * If only to is provided: payments up to that date
+        * If neither is provided: all payments (no date filtering)
+        
+        **Access Control:**
+        * Users can only access their own totals (userId must match authenticated user)
+        * Administrators can access any user's totals
+        
+        **Use Cases:**
+        * Customer spending analysis
+        * Monthly/quarterly financial reports
+        * User account summaries
+      operationId: getPaymentAmountForCurrentUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          description: ID of the user to calculate total for
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          example: 12345
+        - name: from
+          in: query
+          description: Start of date range (inclusive) in ISO 8601 format
+          required: false
+          schema:
+            type: string
+            format: date-time
+          example: "2024-03-01T00:00:00Z"
+        - name: to
+          in: query
+          description: End of date range (inclusive) in ISO 8601 format
+          required: false
+          schema:
+            type: string
+            format: date-time
+          example: "2024-03-31T23:59:59Z"
+      responses:
+        '200':
+          description: Successfully calculated total amount
+          content:
+            application/json:
+              schema:
+                type: number
+                format: decimal
+                description: Total sum of payments as a decimal value
+              examples:
+                userWithPayments:
+                  summary: User has payments in the specified range
+                  value: 299.97
+                userWithNoPayments:
+                  summary: No payments found for the user in the range
+                  value: 0
+                allTimeTotal:
+                  summary: All-time total (no date filters)
+                  value: 1542.50
+        '400':
+          description: Invalid date format or invalid userId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User attempting to access another user's total without admin role
+
+  /payments/total:
+    get:
+      tags:
+        - Statistics
+      summary: Get total payment amount for all users (Admin only)
+      description: |
+        Calculates the sum of all successful payments across the entire system.
+        
+        **Admin-only Endpoint:**
+        This endpoint provides system-wide financial statistics and is only accessible
+        to users with the ADMIN role.
+        
+        **Date Range Filtering:**
+        * If both from and to are provided: payments between those dates (inclusive)
+        * If only from is provided: payments from that date onwards
+        * If only to is provided: payments up to that date
+        * If neither is provided: all-time total (all payments)
+        
+        **Use Cases:**
+        * System-wide revenue reports
+        * Financial auditing
+        * Business intelligence and analytics
+        * Period-over-period comparison
+      operationId: getPaymentAmountOfUsersInRange
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          description: Start of date range (inclusive) in ISO 8601 format
+          required: false
+          schema:
+            type: string
+            format: date-time
+          example: "2024-03-01T00:00:00Z"
+        - name: to
+          in: query
+          description: End of date range (inclusive) in ISO 8601 format
+          required: false
+          schema:
+            type: string
+            format: date-time
+          example: "2024-03-31T23:59:59Z"
+      responses:
+        '200':
+          description: Successfully calculated total amount for all users
+          content:
+            application/json:
+              schema:
+                type: number
+                format: decimal
+                description: Total sum of all payments in the system as a decimal value
+              examples:
+                paymentsInRange:
+                  summary: Payments found in the specified date range
+                  value: 15420.50
+                noPaymentsInRange:
+                  summary: No payments found in the specified range
+                  value: 0
+                allTimeTotal:
+                  summary: All-time system total (no date filters)
+                  value: 125000.75
+        '400':
+          description: Invalid date format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+        '403':
+          description: Forbidden - User does not have ADMIN role
